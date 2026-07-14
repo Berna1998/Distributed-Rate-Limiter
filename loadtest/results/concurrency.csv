@@ -1,0 +1,5 @@
+concurrency,client_id,allowed_count,rejected_count,excess_over_capacity
+5,concurrency-test-5,5,0,0
+20,concurrency-test-20,5,15,0
+50,concurrency-test-50,5,45,0
+200,concurrency-test-200,5,195,0

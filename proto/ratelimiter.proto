@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package ratelimiter;
+
+option go_package = "./proto";
+
+service RateLimiter {
+  rpc CheckQuota(QuotaRequest) returns (QuotaResponse);
+  rpc Gossip(GossipMessage) returns (GossipResponse);
+}
+
+message QuotaRequest {
+  string client_id = 1;
+}
+
+message QuotaResponse {
+  bool allowed = 1;
+  int32 remaining_tokens = 2;
+}
+
+message BucketState {
+  string client_id = 1;
+  double tokens = 2;
+  int64 last_refill = 3;
+  int64 last_updated = 4;
+}
+
+message GossipMessage {
+  string sender = 1;
+  repeated BucketState buckets = 2;
+}
+
+message GossipResponse {
+  bool success = 1;
+}

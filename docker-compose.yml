@@ -1,0 +1,54 @@
+services:
+  nats:
+    image: nats:2-alpine
+
+  aggregator1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGET: aggregator
+    command: ["-id=node1", "-port=50051"]
+    environment:
+      - PEER_ADDRESSES=aggregator1:50051,aggregator2:50052
+      - SELF_ADDRESS=aggregator1:50051
+
+  aggregator2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGET: aggregator
+    command: ["-id=node2", "-port=50052"]
+    environment:
+      - PEER_ADDRESSES=aggregator1:50051,aggregator2:50052
+      - SELF_ADDRESS=aggregator2:50052
+
+  edge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGET: edge
+    environment:
+      - AGGREGATOR_ADDRESSES=aggregator1:50051,aggregator2:50052
+      - NATS_URL=nats://nats:4222
+    ports:
+      - "8081:8081"
+    depends_on:
+      - aggregator1
+      - aggregator2
+      - nats
+
+  analytics:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGET: analytics
+    environment:
+      - NATS_URL=nats://nats:4222
+    ports:
+      - "8082:8082"
+    depends_on:
+      - nats

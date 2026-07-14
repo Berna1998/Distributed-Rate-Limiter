@@ -1,0 +1,11 @@
+wait_ms,client_id,secondary_allowed,secondary_remaining,replicated
+0,gossip-delay-test-0,true,4,false
+500,gossip-delay-test-500,true,4,false
+1000,gossip-delay-test-1000,true,4,false
+1500,gossip-delay-test-1500,true,0,true
+2000,gossip-delay-test-2000,true,4,false
+3000,gossip-delay-test-3000,true,2,true
+4000,gossip-delay-test-4000,true,4,false
+5000,gossip-delay-test-5000,true,4,false
+6000,gossip-delay-test-6000,true,4,false
+7000,gossip-delay-test-7000,true,4,false

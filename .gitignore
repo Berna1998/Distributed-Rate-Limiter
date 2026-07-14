@@ -1,0 +1,7 @@
+# Local-only Compose override (republishes aggregator ports for direct
+# gRPC debugging / the gossip-delay loadtest scenario). Must not ship to
+# EC2: those ports must stay internal-only on a publicly reachable host.
+docker-compose.override.yml
+
+# JetBrains IDE project settings (local, machine-specific)
+.idea/
