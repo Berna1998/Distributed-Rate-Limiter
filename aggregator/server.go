@@ -6,7 +6,11 @@ import (
 	"time"
 
 	pb "distributed-rate-limiter/proto"
+
+	"go.opentelemetry.io/otel"
 )
+
+var tracer = otel.Tracer("aggregator")
 
 type RateLimiterServer struct {
 	pb.UnimplementedRateLimiterServer
@@ -21,9 +25,10 @@ func (s *RateLimiterServer) CheckQuota(
 
 	log.Printf("[%s] Request received from client: %s", s.nodeID, req.ClientId)
 
+	_, span := tracer.Start(ctx, "bucket.CheckAndConsume")
 	bucket := s.manager.GetBucket(req.ClientId)
-
 	allowed := bucket.Allow()
+	span.End()
 
 	return &pb.QuotaResponse{
 		Allowed:         allowed,

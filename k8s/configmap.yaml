@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rate-limiter-config
+  namespace: rate-limiter
+data:
+  AGGREGATOR_ADDRESSES: "aggregator1:50051,aggregator2:50052,aggregator3:50053"
+  NATS_URL: "nats://nats:4222"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "jaeger:4317"

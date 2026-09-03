@@ -1,106 +1,137 @@
 # Distributed Rate Limiter
 
-Sistema distribuito di limitazione del traffico (rate limiting) globale, scritto in Go, pensato per
-protezione da DoS e controllo delle quote d'uso di API. Il conteggio delle richieste è gestito in modo
-decentralizzato tra più nodi, senza un singolo collo di bottiglia centralizzato.
+Sistema distribuito di rate limiting scritto in Go, con tre nodi indipendenti (edge, aggregator,
+analytics) che comunicano in modo sincrono (gRPC) e asincrono (NATS).
 
-## Architettura
+## Funzionamento
 
-Il sistema è composto da 3 tipi di nodo indipendenti:
-
-- **Edge rate limiter** (stateless, [edge/](edge/)) — interfaccia ad alto throughput che riceve le richieste
-  dei client, ne verifica la quota interrogando l'aggregator competente, applica il circuit breaker in caso
-  di guasto, e inoltra in modo asincrono i log delle violazioni.
-- **Token bucket aggregator** (stateful, [aggregator/](aggregator/)) — mantiene lo stato dei token residui
-  per ogni client. Ogni client è assegnato in modo deterministico (hash del `client_id`) a un nodo
-  aggregator primario; gli aggregator si scambiano periodicamente lo stato via gossip, sia per la
-  tolleranza ai guasti (failover) sia per la replica.
-- **Analytics & alerting** (stateless, [analytics/](analytics/)) — riceve in modo asincrono i log delle
-  violazioni di quota via NATS ed emette un alert quando un client supera una soglia critica di richieste
-  respinte in una finestra temporale.
-
-Comunicazione:
-- **edge ↔ aggregator**: gRPC / Protocol Buffers ([proto/ratelimiter.proto](proto/ratelimiter.proto)), sincrona, bassa latenza.
-- **aggregator ↔ aggregator**: gRPC, gossip periodico asincrono.
-- **edge → analytics**: NATS (publish/subscribe), asincrono, disaccoppiato.
-
-## Pattern architetturali implementati
-
-- **RPC sincrono (gRPC/Protobuf)** — per il controllo istantaneo delle quote tra edge e aggregator.
-- **Circuit Breaker** ([edge/circuit_breaker.go](edge/circuit_breaker.go)) — isola i fallimenti verso un
-  aggregator (stati Closed/Open/Half-Open) ed eroga un fallback degradato (fail-open) quando tutti i nodi
-  sono irraggiungibili, invece di bloccare il traffico legittimo.
-- **Asynchronous Event-Driven Messaging** ([edge/violation_publisher.go](edge/violation_publisher.go),
-  [analytics/subscriber.go](analytics/subscriber.go)) — le violazioni di quota vengono pubblicate su NATS
-  in modo non bloccante e consumate in modo disaccoppiato dal servizio analytics.
-- **Sharding + Gossip** — partizionamento orizzontale dello stato tramite hashing del `client_id`, con
-  sincronizzazione asincrona via gossip come meccanismo di replica/failover tra i nodi aggregator.
-
-## Struttura del repository
-
-```
-edge/          edge rate limiter (routing, circuit breaker, publisher eventi)
-aggregator/    token bucket aggregator (stato, gossip, server gRPC)
-analytics/     servizio di analytics/alerting (subscriber NATS, soglie, HTTP stats)
-internal/
-  config/      parametri di configurazione centralizzati
-  events/      tipi di evento condivisi (edge -> analytics)
-proto/         definizione e codice generato del servizio gRPC
-loadtest/      strumento di carico/misura per lo scenario di scalabilità
-Dockerfile     build multi-stage parametrica (ARG TARGET=edge|aggregator|analytics)
-docker-compose.yml   orchestrazione di nats, aggregator1, aggregator2, edge, analytics
-```
-
-## Come si esegue
-
-Prerequisiti: Docker Desktop (per l'esecuzione containerizzata) oppure Go 1.26+ per l'esecuzione locale.
-
-```powershell
-docker compose build
-docker compose up
-```
-
-Una volta che tutti i servizi sono in ascolto, si può mandare una richiesta di prova verso l'edge:
-
-```powershell
-curl -H "X-Client-ID: mario" http://localhost:8081/api
-```
-
-I contatori/alert correnti di analytics sono ispezionabili su:
-
-```powershell
-curl http://localhost:8082/stats
-```
-
-## Testing
-
-**Test automatici Go**, unitari e di integrazione (circuit breaker, failover con server gRPC finti):
-
-```powershell
-go test ./...
-```
-
-**Scenari di scalabilità** ([loadtest/](loadtest/)), da lanciare con il sistema già in esecuzione:
-
-```powershell
-go run ./loadtest -scenario=<nome>
-```
-
-| Scenario | Cosa misura |
-|---|---|
-| `concurrency` | correttezza del token bucket sotto accesso concorrente (nessuna race condition) |
-| `load` | latenza (p50/p95/p99) al crescere del numero di client concorrenti |
-| `failover` | costo in latenza e comportamento del circuit breaker durante un guasto reale di un aggregator |
-| `sharding` | equità della distribuzione hash dei client tra i nodi aggregator |
-| `gossip-delay` | tempo di propagazione dello stato tra aggregator via gossip |
-| `alert-sensitivity` | sensibilità della soglia di alerting a profili di client onesti vs aggressivi |
-
-Ogni scenario scrive i propri risultati in `loadtest/results/*.csv`.
+Il funzionamento dell'applicazione prevede la corretta installazione di Docker.
 
 ## Configurazione
 
-I parametri principali sono centralizzati in [internal/config/config.go](internal/config/config.go):
-capacità e refill rate del token bucket, soglia/cooldown del circuit breaker, soglia/finestra di alerting.
-Gli indirizzi di rete (`AGGREGATOR_ADDRESSES`, `NATS_URL`, `PEER_ADDRESSES`, `SELF_ADDRESS`) sono invece
-letti da variabili d'ambiente con fallback a valori di default per l'esecuzione locale — è così che
-`docker-compose.yml` collega i container tra loro senza indirizzi hardcoded.
+Valori da inserire a mano per far partire ed eseguire il sistema:
+
+- **`X-Client-ID`**: ogni richiesta verso l'edge (`/api`) richiede questo header, con un identificativo
+  a scelta del client. Il rate limiting viene applicato per singolo valore: identificativi diversi
+  hanno bucket di quota separati. Esempio di richiesta:
+
+  ```
+  curl -H "X-Client-ID: mario" http://localhost:8081/api        # Linux/macOS
+  curl.exe -H "X-Client-ID: mario" http://localhost:8081/api    # Windows (PowerShell)
+  ```
+
+- **Deployment su EC2**: prima dell'avvio serve un'istanza con Security Group che apra le porte 22
+  (SSH) e 8081 (edge), la chiave `.pem` per la connessione SSH, e l'indirizzo IP pubblico
+  dell'istanza (usato sia per connettersi sia per raggiungere l'edge dall'esterno).
+- **Deployment su Kubernetes**: serve un cluster locale attivo e `kubectl` già configurato verso
+  quel cluster.
+
+### Avvio dei container (Docker Compose)
+
+Per avviare l'applicazione basta eseguire, dalla cartella del progetto:
+
+```
+docker compose build
+docker compose up -d
+```
+
+oppure in un unico comando:
+
+```
+docker compose up --build -d
+```
+
+Per fermare i container:
+
+```
+docker compose down
+```
+
+Una volta avviati, l'applicazione è raggiungibile da:
+
+```
+curl -H "X-Client-ID: mario" http://localhost:8081/api
+```
+
+Le tracce distribuite sono consultabili su `http://localhost:16686`.
+
+### Avvio dei pod (Kubernetes, opzionale)
+
+Per usare Kubernetes serve un cluster locale attivo e il comando `kubectl` configurato. Le immagini
+vanno prima pubblicate su un registry locale, perché il cluster Kubernetes usa uno store immagini
+separato da quello di Docker:
+
+```
+docker compose build
+docker run -d -p 5000:5000 --restart=always --name registry registry:2
+```
+
+poi, per ciascuna immagine (aggregator1, aggregator2, aggregator3, edge, analytics):
+
+```
+docker tag distributed-rate-limiter-edge:latest localhost:5000/distributed-rate-limiter-edge:latest
+docker push localhost:5000/distributed-rate-limiter-edge:latest
+```
+
+fatto ciò, si avviano i pod con:
+
+```
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/
+```
+
+Per fermare tutto:
+
+```
+kubectl delete namespace rate-limiter
+```
+
+Se il codice viene modificato, vanno rifatti build, tag e push delle immagini, e poi:
+
+```
+kubectl rollout restart deployment -n rate-limiter aggregator1 aggregator2 aggregator3 edge analytics
+```
+
+### Deployment su Amazon EC2
+
+Bisogna creare un'istanza EC2 (AMI Ubuntu, si consiglia almeno t3.micro/t3.small) con il Security
+Group che apre la porta 22 per il traffico SSH e la porta 8081 per l'edge. Ci si connette con:
+
+```
+ssh -i <chiave>.pem ubuntu@<ip-pubblico>
+```
+
+si installano Docker e git:
+
+```
+sudo apt update
+sudo apt install -y docker.io docker-compose-v2 git
+sudo usermod -aG docker $USER
+```
+
+(bisogna disconnettersi e riconnettersi perché il gruppo docker sia effettivo). Si clona il repository:
+
+```
+git clone https://github.com/Berna1998/Distributed-Rate-Limiter.git
+cd Distributed-Rate-Limiter
+```
+
+e si avvia tutto con:
+
+```
+docker compose build
+docker compose up -d
+```
+
+Dal proprio PC l'applicazione è raggiungibile su:
+
+```
+curl -H "X-Client-ID: mario" http://<ip-pubblico-ec2>:8081/api
+```
+
+Per consultare le tracce distribuite, essendo Jaeger non esposto pubblicamente, si apre un tunnel SSH
+dedicato e poi si va su `http://localhost:16686` dal browser:
+
+```
+ssh -i <chiave>.pem ubuntu@<ip> -L 16686:localhost:16686
+```

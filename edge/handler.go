@@ -16,7 +16,7 @@ func apiHandler(client *AggregatorClient, publisher *ViolationPublisher) http.Ha
 			return
 		}
 
-		resp, degraded, err := client.CheckQuota(clientID)
+		resp, degraded, err := client.CheckQuota(r.Context(), clientID)
 
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -35,7 +35,7 @@ func apiHandler(client *AggregatorClient, publisher *ViolationPublisher) http.Ha
 			return
 		}
 
-		publisher.Publish(clientID)
+		publisher.Publish(r.Context(), clientID)
 		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 
 	}

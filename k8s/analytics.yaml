@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics
+  namespace: rate-limiter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics
+  template:
+    metadata:
+      labels:
+        app: analytics
+    spec:
+      containers:
+        - name: analytics
+          image: localhost:5000/distributed-rate-limiter-analytics:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: rate-limiter-config
+          ports:
+            - containerPort: 8082
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics
+  namespace: rate-limiter
+spec:
+  type: LoadBalancer
+  selector:
+    app: analytics
+  ports:
+    - port: 8082
+      targetPort: 8082

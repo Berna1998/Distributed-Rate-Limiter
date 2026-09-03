@@ -6,11 +6,8 @@ import (
 	"time"
 )
 
-// ViolationStore counts rejected requests per client within a fixed window,
-// resetting all counters on a ticker instead of maintaining a true sliding
-// window per client. This trades some precision (a burst spanning a reset
-// boundary can be undercounted) for a much simpler, race-free implementation
-// that is enough to demonstrate the alerting requirement.
+// ViolationStore conta le richieste rifiutate per ogni client all'interno
+// di una finestra fissa, azzerando tutti i contatori a ogni tick
 type ViolationStore struct {
 	mu        sync.Mutex
 	counts    map[string]int
@@ -42,8 +39,8 @@ func (s *ViolationStore) resetLoop(window time.Duration) {
 	}
 }
 
-// Record registers a rejected request for clientID and fires an alert the
-// first time the client crosses the threshold within the current window.
+// registra una richiesta respinta per clientID e genera un avviso la
+// prima volta che il client supera la soglia all'interno della finestra corrente.
 func (s *ViolationStore) Record(clientID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -1,9 +1,11 @@
 package main
 
 import (
-	pb "distributed-rate-limiter/proto"
 	"log"
 	"time"
+
+	"distributed-rate-limiter/internal/config"
+	pb "distributed-rate-limiter/proto"
 )
 
 type GossipService struct {
@@ -27,18 +29,18 @@ func NewGossipService(
 }
 
 func (g *GossipService) Start() {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(config.GossipInterval)
 	defer ticker.Stop()
 	for range ticker.C {
 		log.Printf("[%s] Starting gossip round...", g.nodeID)
-		// 1. snapshot (READ ONLY)
+		// snapshot (READ ONLY)
 		snapshot := g.manager.SnapshotModified()
 		if len(snapshot) == 0 {
 			continue
 		}
 		log.Printf("[%s] Sending %d modified buckets", g.nodeID, len(snapshot))
 
-		// 2. build payload
+		// build payload
 		pbBuckets := make([]*pb.BucketState, 0, len(snapshot))
 
 		for _, state := range snapshot {
@@ -55,7 +57,7 @@ func (g *GossipService) Start() {
 			Buckets: pbBuckets,
 		}
 
-		// 3. gossip send
+		// gossip send
 		success := false
 
 		for _, peer := range g.peers {
@@ -67,7 +69,7 @@ func (g *GossipService) Start() {
 			success = true
 		}
 
-		// 4. reset dirty SOLO se almeno un gossip è andato a buon fine
+		// reset dirty SOLO se almeno un gossip è andato a buon fine
 		if success {
 			for _, state := range snapshot {
 				bucket, exists := g.manager.buckets[state.ClientID]

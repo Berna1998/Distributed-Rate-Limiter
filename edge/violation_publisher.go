@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"time"
@@ -9,27 +10,22 @@ import (
 	"distributed-rate-limiter/internal/events"
 
 	"github.com/nats-io/nats.go"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
-// ViolationPublisher forwards rejected-request events to the analytics
-// service over NATS without ever blocking the client-facing request path.
-// A bounded queue absorbs bursts; if it fills up (broker slow/down) events
-// are dropped rather than piling up goroutines or adding latency — under a
-// real request flood, the logging/alerting path must not become a second
-// bottleneck on top of the one it's supposed to be observing.
+// ViolationPublisher inoltra gli eventi relativi alle richieste rifiutate al servizio di analisi
+// tramite NATS senza mai bloccare il percorso della richiesta verso il client.
 type ViolationPublisher struct {
 	nc     *nats.Conn
 	events chan events.ViolationEvent
 }
 
 func NewViolationPublisher(natsURL string) (*ViolationPublisher, error) {
-	// RetryOnFailedConnect makes the initial dial resilient to start-up
-	// ordering (e.g. in Docker Compose, if NATS isn't accepting connections
-	// yet): instead of failing immediately, the client keeps retrying in the
-	// background and buffers publishes until it connects.
 	nc, err := nats.Connect(
 		natsURL,
-		nats.RetryOnFailedConnect(true),
+		nats.RetryOnFailedConnect(true), //per essere resiliente all'avvio
 		nats.MaxReconnects(-1),
 		nats.ReconnectWait(2*time.Second),
 	)
@@ -60,13 +56,18 @@ func (p *ViolationPublisher) run() {
 	}
 }
 
-// Publish enqueues a violation event without blocking the caller. If the
-// internal queue is full, the event is dropped and logged rather than
-// applying back-pressure to the HTTP request path.
-func (p *ViolationPublisher) Publish(clientID string) {
+// inserisce in coda un evento di violazione senza bloccare il chiamante. Se la
+// coda interna è piena, l'evento viene scartato e registrato. ctx porta il
+// contesto di tracing della richiesta HTTP corrente, iniettato nell'evento
+// così la traccia può proseguire dentro analytics.
+func (p *ViolationPublisher) Publish(ctx context.Context, clientID string) {
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+
 	ev := events.ViolationEvent{
-		ClientID:  clientID,
-		Timestamp: time.Now(),
+		ClientID:    clientID,
+		Timestamp:   time.Now(),
+		TraceParent: carrier.Get("traceparent"),
 	}
 
 	select {

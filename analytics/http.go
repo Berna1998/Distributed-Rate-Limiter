@@ -5,9 +5,8 @@ import (
 	"net/http"
 )
 
-// statsHandler exposes the current per-client rejection counts for the
-// active window, mainly so the scalability test scenario can inspect
-// alerting accuracy without grepping logs.
+// statsHandler espone i conteggi attuali dei rifiuti
+// per ciascun client relativi alla finestra attiva.
 func statsHandler(store *ViolationStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

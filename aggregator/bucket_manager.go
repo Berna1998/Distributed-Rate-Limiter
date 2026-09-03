@@ -29,14 +29,7 @@ func NewBucketManager(nodeID string) *BucketManager {
 	}
 }
 
-// GetBucket used to take a full write lock for every call, serializing all
-// requests through one mutex per aggregator regardless of client — under the
-// loadtest's "load" scenario this showed up directly as p50 latency growing
-// from ~27ms at 10 concurrent clients to ~1.2s at 1000. Existing buckets are
-// now looked up under a read lock so unrelated clients' requests can proceed
-// in parallel; only the (rare) first-touch path that creates a new bucket
-// takes the write lock, with a re-check in case another goroutine created it
-// first while we were waiting for that lock.
+// Recupera il token bucket associato a un determinato clientID;
 func (m *BucketManager) GetBucket(clientID string) *Bucket {
 
 	m.mu.RLock()

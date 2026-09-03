@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge
+  namespace: rate-limiter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge
+  template:
+    metadata:
+      labels:
+        app: edge
+    spec:
+      containers:
+        - name: edge
+          image: localhost:5000/distributed-rate-limiter-edge:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: rate-limiter-config
+          ports:
+            - containerPort: 8081
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: edge
+  namespace: rate-limiter
+spec:
+  type: LoadBalancer
+  selector:
+    app: edge
+  ports:
+    - port: 8081
+      targetPort: 8081

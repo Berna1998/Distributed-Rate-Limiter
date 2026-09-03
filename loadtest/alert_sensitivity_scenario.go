@@ -22,7 +22,7 @@ func runAlertSensitivityScenario(cfg Config) {
 	const duration = 60 * time.Second
 
 	profiles := map[string]time.Duration{
-		"alert-test-honest":     1200 * time.Millisecond, // just above the 1 token/s refill rate: rarely rejected
+		"alert-test-honest":     2200 * time.Millisecond, // just above the 0.5 token/s refill rate (1 every 2s): rarely rejected
 		"alert-test-aggressive": 50 * time.Millisecond,    // far above budget: floods rejections
 	}
 

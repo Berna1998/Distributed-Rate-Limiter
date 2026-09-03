@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"time"
@@ -8,23 +9,24 @@ import (
 	"distributed-rate-limiter/internal/events"
 
 	"github.com/nats-io/nats.go"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
-// Subscriber consumes violation events published by the edge over NATS and
-// feeds them into the ViolationStore. This is the receiving side of the
-// Asynchronous Event-Driven Messaging pattern: analytics is fully decoupled
-// from the edge, it only needs the broker to be reachable.
+var tracer = otel.Tracer("analytics")
+
+// qui si acquisiscono gli eventi di violazione pubblicati dall'edge
+// tramite NATS e si inseriscono nel ViolationStore.
 type Subscriber struct {
 	nc  *nats.Conn
 	sub *nats.Subscription
 }
 
 func NewSubscriber(natsURL string, store *ViolationStore) (*Subscriber, error) {
-	// See the matching comment in edge/violation_publisher.go: this makes the
-	// initial connection resilient to start-up ordering in Docker Compose.
 	nc, err := nats.Connect(
 		natsURL,
-		nats.RetryOnFailedConnect(true),
+		nats.RetryOnFailedConnect(true), //per essere resiliente all'avvio
 		nats.MaxReconnects(-1),
 		nats.ReconnectWait(2*time.Second),
 	)
@@ -38,7 +40,12 @@ func NewSubscriber(natsURL string, store *ViolationStore) (*Subscriber, error) {
 			log.Printf("subscriber: invalid violation event: %v", err)
 			return
 		}
+
+		carrier := propagation.MapCarrier{"traceparent": ev.TraceParent}
+		ctx := otel.GetTextMapPropagator().Extract(context.Background(), carrier)
+		_, span := tracer.Start(ctx, "analytics.ProcessViolation")
 		store.Record(ev.ClientID)
+		span.End()
 	})
 	if err != nil {
 		nc.Close()

@@ -1,3 +1,3 @@
 client_id,profile_interval_ms,rejections_in_window
-alert-test-honest,1200,0
-alert-test-aggressive,50,246
+alert-test-honest,2200,0
+alert-test-aggressive,50,1039

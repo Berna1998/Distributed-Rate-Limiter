@@ -26,10 +26,6 @@ func (s breakerState) String() string {
 	}
 }
 
-// CircuitBreaker isolates a single aggregator node: after enough consecutive
-// failures it stops sending traffic to that node for a cooldown window, then
-// lets exactly one trial request through before deciding whether to close
-// (recover) or reopen.
 type CircuitBreaker struct {
 	mu sync.Mutex
 
@@ -52,9 +48,7 @@ func NewCircuitBreaker(failureThreshold int, cooldown time.Duration) *CircuitBre
 	}
 }
 
-// Allow reports whether a call may be attempted right now. It transitions
-// Open -> HalfOpen once the cooldown has elapsed, and only ever admits a
-// single in-flight trial request while HalfOpen.
+// verifica se è possibile effettuare una chiamata in questo momento.
 func (cb *CircuitBreaker) Allow() bool {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()

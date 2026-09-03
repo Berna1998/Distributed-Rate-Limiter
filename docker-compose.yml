@@ -2,6 +2,15 @@ services:
   nats:
     image: nats:2-alpine
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      # solo su loopback: niente regola nel Security Group EC2, si consulta
+      # via tunnel SSH (-L 16686:localhost:16686), mai esposto pubblicamente
+      - "127.0.0.1:16686:16686"
+
   aggregator1:
     build:
       context: .
@@ -10,8 +19,11 @@ services:
         TARGET: aggregator
     command: ["-id=node1", "-port=50051"]
     environment:
-      - PEER_ADDRESSES=aggregator1:50051,aggregator2:50052
+      - AGGREGATOR_ADDRESSES=aggregator1:50051,aggregator2:50052,aggregator3:50053
       - SELF_ADDRESS=aggregator1:50051
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
+    depends_on:
+      - jaeger
 
   aggregator2:
     build:
@@ -21,8 +33,25 @@ services:
         TARGET: aggregator
     command: ["-id=node2", "-port=50052"]
     environment:
-      - PEER_ADDRESSES=aggregator1:50051,aggregator2:50052
+      - AGGREGATOR_ADDRESSES=aggregator1:50051,aggregator2:50052,aggregator3:50053
       - SELF_ADDRESS=aggregator2:50052
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
+    depends_on:
+      - jaeger
+
+  aggregator3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGET: aggregator
+    command: ["-id=node3", "-port=50053"]
+    environment:
+      - AGGREGATOR_ADDRESSES=aggregator1:50051,aggregator2:50052,aggregator3:50053
+      - SELF_ADDRESS=aggregator3:50053
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
+    depends_on:
+      - jaeger
 
   edge:
     build:
@@ -31,14 +60,17 @@ services:
       args:
         TARGET: edge
     environment:
-      - AGGREGATOR_ADDRESSES=aggregator1:50051,aggregator2:50052
+      - AGGREGATOR_ADDRESSES=aggregator1:50051,aggregator2:50052,aggregator3:50053
       - NATS_URL=nats://nats:4222
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
     ports:
       - "8081:8081"
     depends_on:
       - aggregator1
       - aggregator2
+      - aggregator3
       - nats
+      - jaeger
 
   analytics:
     build:
@@ -48,7 +80,9 @@ services:
         TARGET: analytics
     environment:
       - NATS_URL=nats://nats:4222
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
     ports:
       - "8082:8082"
     depends_on:
       - nats
+      - jaeger

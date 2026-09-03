@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aggregator1
+  namespace: rate-limiter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aggregator1
+  template:
+    metadata:
+      labels:
+        app: aggregator1
+    spec:
+      containers:
+        - name: aggregator1
+          image: localhost:5000/distributed-rate-limiter-aggregator1:latest
+          imagePullPolicy: Always
+          args: ["-id=node1", "-port=50051"]
+          envFrom:
+            - configMapRef:
+                name: rate-limiter-config
+          env:
+            - name: SELF_ADDRESS
+              value: "aggregator1:50051"
+          ports:
+            - containerPort: 50051
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aggregator1
+  namespace: rate-limiter
+spec:
+  selector:
+    app: aggregator1
+  ports:
+    - port: 50051
+      targetPort: 50051

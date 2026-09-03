@@ -15,9 +15,9 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 )
 
-// fakeAggregator is a minimal RateLimiterServer whose CheckQuota can be
-// flipped to fail on demand, so tests can simulate a node going down without
-// touching real network sockets or the real bucket/gossip logic.
+// fakeAggregator è un RateLimiterServer minimale il cui metodo CheckQuota può essere
+// impostato in modo da restituire un errore su richiesta, così da consentire ai test
+// di simulare il malfunzionamento di un nodo
 type fakeAggregator struct {
 	pb.UnimplementedRateLimiterServer
 	failing atomic.Bool
@@ -82,14 +82,14 @@ func TestAggregatorClient_FailsOverToHealthyNode(t *testing.T) {
 
 	// two failed attempts trip node A's breaker (threshold=2)
 	for i := 0; i < 2; i++ {
-		if _, _, err := client.CheckQuota(clientID); err != nil {
+		if _, _, err := client.CheckQuota(context.Background(), clientID); err != nil {
 			t.Fatalf("unexpected error on attempt %d: %v", i+1, err)
 		}
 	}
 	callsOnAAfterOpen := nodeA.calls.Load()
 
 	for i := 0; i < 3; i++ {
-		if _, _, err := client.CheckQuota(clientID); err != nil {
+		if _, _, err := client.CheckQuota(context.Background(), clientID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	}
@@ -118,7 +118,7 @@ func TestAggregatorClient_DegradedWhenAllNodesDown(t *testing.T) {
 		},
 	}
 
-	resp, degraded, err := client.CheckQuota("any-client")
+	resp, degraded, err := client.CheckQuota(context.Background(), "any-client")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
