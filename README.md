@@ -9,23 +9,6 @@ Il funzionamento dell'applicazione prevede la corretta installazione di Docker.
 
 ## Configurazione
 
-Valori da inserire a mano per far partire ed eseguire il sistema:
-
-- **`X-Client-ID`**: ogni richiesta verso l'edge (`/api`) richiede questo header, con un identificativo
-  a scelta del client. Il rate limiting viene applicato per singolo valore: identificativi diversi
-  hanno bucket di quota separati. Esempio di richiesta:
-
-  ```
-  curl -H "X-Client-ID: mario" http://localhost:8081/api        # Linux/macOS
-  curl.exe -H "X-Client-ID: mario" http://localhost:8081/api    # Windows (PowerShell)
-  ```
-
-- **Deployment su EC2**: prima dell'avvio serve un'istanza con Security Group che apra le porte 22
-  (SSH) e 8081 (edge), la chiave `.pem` per la connessione SSH, e l'indirizzo IP pubblico
-  dell'istanza (usato sia per connettersi sia per raggiungere l'edge dall'esterno).
-- **Deployment su Kubernetes**: serve un cluster locale attivo e `kubectl` già configurato verso
-  quel cluster.
-
 ### Avvio dei container (Docker Compose)
 
 Per avviare l'applicazione basta eseguire, dalla cartella del progetto:
@@ -95,7 +78,9 @@ kubectl rollout restart deployment -n rate-limiter aggregator1 aggregator2 aggre
 ### Deployment su Amazon EC2
 
 Bisogna creare un'istanza EC2 (AMI Ubuntu, si consiglia almeno t3.micro/t3.small) con il Security
-Group che apre la porta 22 per il traffico SSH e la porta 8081 per l'edge. Ci si connette con:
+Group che apre la porta 22 per il traffico SSH e la porta 8081 per l'edge, la chiave `.pem` per la connessione SSH, 
+e l'indirizzo IP pubblico dell'istanza (usato sia per connettersi sia per raggiungere l'edge dall'esterno).
+Ci si connette con:
 
 ```
 ssh -i <chiave>.pem ubuntu@<ip-pubblico>
@@ -135,3 +120,13 @@ dedicato e poi si va su `http://localhost:16686` dal browser:
 ```
 ssh -i <chiave>.pem ubuntu@<ip> -L 16686:localhost:16686
 ```
+
+## Per poter mandare le richieste all'edge mentre il sistema è in esecuzione:
+
+  ```
+  curl -H "X-Client-ID: mario" http://localhost:8081/api        # Linux/macOS
+  curl.exe -H "X-Client-ID: mario" http://localhost:8081/api    # Windows (PowerShell)
+  ```
+
+- Dove **`X-Client-ID`** è un identificativo del client.
+- Identificativi diversi hanno bucket di quota separati.
