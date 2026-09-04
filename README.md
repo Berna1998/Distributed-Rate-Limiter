@@ -18,12 +18,6 @@ docker compose build
 docker compose up -d
 ```
 
-oppure in un unico comando:
-
-```
-docker compose up --build -d
-```
-
 Per fermare i container:
 
 ```
@@ -33,7 +27,8 @@ docker compose down
 Una volta avviati, l'applicazione è raggiungibile da:
 
 ```
-curl -H "X-Client-ID: mario" http://localhost:8081/api
+curl -H "X-Client-ID: mario" http://localhost:8081/api    # Linux/macOS
+curl.exe -H "X-Client-ID: mario" http://localhost:8081/api    # Windows (PowerShell)
 ```
 
 Le tracce distribuite sono consultabili su `http://localhost:16686`.
@@ -111,7 +106,8 @@ docker compose up -d
 Dal proprio PC l'applicazione è raggiungibile su:
 
 ```
-curl -H "X-Client-ID: mario" http://<ip-pubblico-ec2>:8081/api
+curl -H "X-Client-ID: mario" http://<ip-pubblico-ec2>:8081/api    # Linux/macOS
+curl.exe -H "X-Client-ID: mario" http://<ip-pubblico-ec2>:8081/api    # Windows (PowerShell)
 ```
 
 Per consultare le tracce distribuite, essendo Jaeger non esposto pubblicamente, si apre un tunnel SSH
@@ -120,13 +116,3 @@ dedicato e poi si va su `http://localhost:16686` dal browser:
 ```
 ssh -i <chiave>.pem ubuntu@<ip> -L 16686:localhost:16686
 ```
-
-## Per poter mandare le richieste all'edge mentre il sistema è in esecuzione:
-
-  ```
-  curl -H "X-Client-ID: mario" http://localhost:8081/api        # Linux/macOS
-  curl.exe -H "X-Client-ID: mario" http://localhost:8081/api    # Windows (PowerShell)
-  ```
-
-- Dove **`X-Client-ID`** è un identificativo del client.
-- Identificativi diversi hanno bucket di quota separati.
